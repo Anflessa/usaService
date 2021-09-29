@@ -2,8 +2,7 @@ package app
 
 import (
 	"crypto/tls"
-
-	"gopkg.in/ldap.v2"
+	"github.com/go-ldap/ldap/v3"
 )
 
 
@@ -19,10 +18,14 @@ func NewLdapConn () (*ldap.Conn, error) {
 		return nil,err
 	}
 
-	err = conn.Bind(`test\admin`, "Te$t0vP@$$") //conn log& pass
-
+	err = conn.Bind(`admin`, "Te$t0vP@$$") //conn log& pass
 	if err != nil {
 		return nil, err
 	}
+
+
+
 	return conn, nil
 }
+
+
