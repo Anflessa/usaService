@@ -4,41 +4,47 @@ import (
 	"LDAPapi/app"
 	"fmt"
 	"github.com/go-ldap/ldap/v3"
+	"golang.org/x/text/encoding/unicode"
 )
 
 
-func main() {
+const (
+	ldapAttrAccountName                        = "sAMAccountName"
+	ldapAttrDN                                 = "dn"
+	ldapAttrUAC                                = "userAccountControl"
+	ldapAttrUPN                                = "userPrincipalName" // username@logon.domain
+	ldapAttrEmail                              = "mail"
+	ldapAttrUnicodePw                          = "unicodePwd"
+	controlTypeLdapServerPolicyHints           = "1.2.840.113556.1.4.2239"
+	controlTypeLdapServerPolicyHintsDeprecated = "1.2.840.113556.1.4.2066"
+	some = "1.3.6.1.4.1.4203.1.11.1"
+)
 
-	//u16 :=utf16.Encode([]rune("encodedsecret"))
-
-	b := []byte{
-		'T',
-		0x00,
-		'E',
-		0x00,
-		'S',
-		0x00,
-		'T',
-		0x00,
-		'T',
-		0x00,
-		'E',
-		0x00,
-		'S',
-		0x00,
-		'T',
-		0x00,
-		'\n',
+type ldapControlServerPolicyHints struct {
+		oid string
 	}
 
+
+func getSupportedControl(conn ldap.Client) ([]string, error) {
+	req := ldap.NewSearchRequest("", ldap.ScopeBaseObject, ldap.NeverDerefAliases, 0, 0, false, "(objectClass=*)", []string{"supportedControl"}, nil)
+	res, err := conn.Search(req)
+	if err != nil {
+		return nil, err
+	}
+	return res.Entries[0].GetAttributeValues("supportedControl"), nil
+}
+
+func main() {
+
+	utf16 := unicode.UTF16(unicode.LittleEndian, unicode.IgnoreBOM)
+	encoded, err := utf16.NewEncoder().String("encodedsecret")
+	fmt.Println(encoded)
 
 	addRequest := ldap.AddRequest{ //главная матрешка
 		//DN:         "CN=golangTest1,CN=Users,DC=test,DC=lab", //путь
-		DN:         "CN=lesov2,OU=Тестовые пользователи,DC=test,DC=lab", //путь
+		DN:         "CN=lesov3,OU=Тестовые пользователи,DC=test,DC=lab", //путь
 		Attributes: []ldap.Attribute{},
 	}
-
-	fmt.Println(string(b))
 
 	//addRequest.Attributes = append(addRequest.Attributes, ldap.Attribute{Type: "cn",Vals: []string{"lesov"}})
 	//addRequest.Attributes = append(addRequest.Attributes, ldap.Attribute{Type: "givenname",Vals: []string{"lesov"}})
@@ -46,25 +52,50 @@ func main() {
 	//addRequest.Attributes = append(addRequest.Attributes, ldap.Attribute{Type: "uid",Vals: []string{"lesov"}})
 	//addRequest.Attributes = append(addRequest.Attributes, ldap.Attribute{Type: "mail",Vals: []string{"testlesov@post.ru"}})
 	//addRequest.Attributes = append(addRequest.Attributes, ldap.Attribute{Type: "telephoneNumber",Vals: []string{"2223"}})
-	addRequest.Attributes = append(addRequest.Attributes, ldap.Attribute{Type: "unicodePwd",Vals: []string{"123 109 100 53 125 66 55 105 50 70 112 88 114 121 113 116 57 108 116 80 48 113 116 119 66 102 103 61 61"}})
+	addRequest.Attributes = append(addRequest.Attributes, ldap.Attribute{Type: "unicodePwd", Vals: []string{encoded}})
 	//addRequest.Attributes = append(addRequest.Attributes, ldap.Attribute{Type: "sAMAccountName",Vals: []string{"lesov"}})
 	//addRequest.Attributes = append(addRequest.Attributes, ldap.Attribute{Type: "userPrincipalName",Vals: []string{"lesov@test.lab"}})
 	//addRequest.Attributes = append(addRequest.Attributes, ldap.Attribute{Type: "UserAccountControl",Vals: []string{"512"}})
-	addRequest.Attributes = append(addRequest.Attributes, ldap.Attribute{Type: "objectclass",Vals: []string{"top","person","organizationalPerson","user"}})
-
-
+	addRequest.Attributes = append(addRequest.Attributes, ldap.Attribute{Type: "objectclass", Vals: []string{"top", "person", "organizationalPerson", "user"}})
 
 	//a:=ldap.Attribute{Type: attrType,Vals:valsArr} //создание элемент атрибута(одна из структур атрибутес)
 
 	conn, err := app.NewLdapConn() //Установили соединение
-	if err!=nil{
-		fmt.Println("when connect:",err)
+	if err != nil {
+		fmt.Println("when connect:", err)
 	}
 
-	err = conn.Add(&addRequest) //Push request to LDAP (try create user)
-	if err!=nil{
-		fmt.Println("when push request:",err)
+	controlTypes, err := getSupportedControl(conn)
+	if err != nil {
+		fmt.Println(err)
 	}
+
+
+
+	control := []ldap.Control{}
+	for _, oid := range controlTypes {
+		fmt.Println(oid)
+		if oid == some || oid == controlTypeLdapServerPolicyHintsDeprecated {
+			//control = append(control, &ldapControlServerPolicyHints{oid: oid})
+			fmt.Println(control)
+			break
+		}
+	}
+
+
+
+	modifObj := ldap.PasswordModifyRequest{
+		"1.3.6.1.4.1.4203.1.11.1",
+		"",
+		encoded,
+	}
+	res, err := conn.PasswordModify(&modifObj)
+	fmt.Println(res,err)
+
+	//err = conn.Add(&addRequest) //Push request to LDAP (try create user)
+	//if err!=nil{
+	//	fmt.Println("when push request:",err)
+	//}
 	//conn.Start() //Maybe starting
 
 }
